@@ -75,4 +75,11 @@ class Images {
   static const String threeDotIcon = 'assets/images/three_dot_icon.png';
   static const String circularCheckIcon =
       'assets/images/circular_check_icon.png';
+  static const String lockIcon = 'assets/images/lock_icon.png';
+  static const String allAppsIcon = 'assets/images/all_apps_icon.png';
+  static const String cellularIcon = 'assets/images/cellular_icon.png';
+  static const String extensionIcon = 'assets/images/extension_icon.png';
+  static const String launcherIcon = 'assets/images/launcher_icon.png';
+  static const String securityIcon = 'assets/images/security_icon.png';
+  static const String updateIcon = 'assets/images/update_icon.png';
 }

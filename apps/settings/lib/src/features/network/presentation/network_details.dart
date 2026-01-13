@@ -13,7 +13,12 @@ import 'package:mechanix_settings/src/features/network/blocs/wireless_settings_b
 import 'package:mechanix_settings/src/features/network/blocs/wireless_settings_event.dart';
 import 'package:mechanix_settings/src/features/network/blocs/wireless_settings_state.dart';
 import 'package:mechanix_settings/src/features/network/models/access_points.dart';
+import 'package:mechanix_settings/src/features/network/models/types.dart';
+import 'package:mechanix_settings/src/features/network/presentation/configure_dns.dart';
+import 'package:mechanix_settings/src/features/network/presentation/configure_proxy.dart';
 import 'package:mechanix_settings/src/features/network/presentation/connect_secure_network.dart';
+import 'package:mechanix_settings/src/features/network/presentation/ipv4_address.dart';
+import 'package:nm/nm.dart';
 import 'package:widgets/mechanix.dart';
 import 'package:widgets/widgets/section_list/mechanix_section_list_theme.dart';
 import 'package:widgets/widgets/section_list/section_list_items_type.dart';
@@ -26,6 +31,8 @@ class NetworkDetails extends StatefulWidget {
 }
 
 class _NetworkDetailsState extends State<NetworkDetails> {
+  bool openPasswordWindow = false;
+
   void onForgetPressed(String ssid) {
     context.read<WirelessSettingsBloc>().add(ForgetNetwork(ssid));
     Navigator.pop(context);
@@ -33,297 +40,329 @@ class _NetworkDetailsState extends State<NetworkDetails> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<WirelessSettingsBloc, WirelessSettingsState>(
-      builder: (context, state) {
-        void showDeleteDialog(String networkName) {
-          showDialog(
-            context: context,
-            builder: (dialogContext) {
-              return AlertDialog(
-                backgroundColor: const Color.fromARGB(255, 54, 54, 54),
-                title: const Text('Forget network'),
-                content: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                        'You might need to enter password to reconnect to this network again.',
-                        style: TextStyle(fontSize: 18)),
-                  ],
-                ),
-                actions: [
-                  CustomTextButton(
-                    label: 'Cancel',
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                  CustomTextButton(
-                    label: 'Forget',
-                    onPressed: () {
-                      Navigator.pop(dialogContext); // pop dialog first
-                      context
-                          .read<WirelessSettingsBloc>()
-                          .add(ForgetNetwork(networkName));
-                      Navigator.pop(context);
-                    },
-                    textColor: dangerColor,
-                  ),
-                ],
-              );
-            },
+    return BlocListener<WirelessSettingsBloc, WirelessSettingsState>(
+      listenWhen: (previous, current) {
+        if (previous.deviceState != current.deviceState) {
+          if (current.deviceState == NetworkManagerDeviceState.failed) {
+            return true;
+          }
+        }
+        return false;
+      },
+      listener: (context, state) {
+        if (state.deviceState == NetworkManagerDeviceState.failed) {
+          final connectNetworkBloc = context.read<ConnectNetworkBloc>();
+          final wirelessSettingsBloc = context.read<WirelessSettingsBloc>();
+
+          MechanixBottomSheet.show(
+            context,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider.value(value: connectNetworkBloc),
+                BlocProvider.value(value: wirelessSettingsBloc),
+              ],
+              child: ConnectSecureNetwork(
+                  accessPoint: state.selectedAccessPoint?.nmAccessPoint),
+            ),
           );
         }
+      },
+      child: BlocBuilder<WirelessSettingsBloc, WirelessSettingsState>(
+        builder: (context, state) {
+          Future<void> onNetworkTap(AccessPoints? selectedAccessPoint) async {
+            if (selectedAccessPoint != null && selectedAccessPoint.isSaved) {
+              context.read<WirelessSettingsBloc>().add(
+                  ConnectSavedNetwork('', selectedAccessPoint.nmAccessPoint));
 
-        return Scaffold(
-          appBar: PreferredSize(
-              preferredSize: const Size.fromHeight(52),
-              child: MechanixNavigationBar(
+              // Navigator.pop(context);
+            } else {
+              final connectNetworkBloc = context.read<ConnectNetworkBloc>();
+              final wirelessSettingsBloc = context.read<WirelessSettingsBloc>();
+
+              MechanixBottomSheet.show(
+                context,
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider.value(value: connectNetworkBloc),
+                    BlocProvider.value(value: wirelessSettingsBloc),
+                  ],
+                  child: ConnectSecureNetwork(
+                      accessPoint: selectedAccessPoint?.nmAccessPoint),
+                ),
+              );
+            }
+          }
+
+          return Scaffold(
+            body: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: ContainerWidget(
+                child: Column(
+                  children: [
+                    CustomTitle(
                       title: state.selectedNMAccessPoint != null
                           ? utf8.decode(state.selectedNMAccessPoint!.ssid)
                           : '',
-                      actionWidgets: (state.selectedAccessPoint!.isActive ||
-                              state.selectedAccessPoint!.isSaved)
-                          ? [
-                              IconButton(
-                                onPressed: () => {
-                                  showDeleteDialog(utf8.decode(
-                                      state.selectedNMAccessPoint!.ssid)),
-                                },
-                                style: ButtonStyle(
-                                  iconColor:
-                                      WidgetStateProperty.all(Colors.white),
-                                  backgroundColor: WidgetStateProperty.all(
-                                      Color(0xFFB71C1C)),
-                                  shape: WidgetStateProperty.all(
-                                    RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                  ),
-                                  minimumSize:
-                                      WidgetStateProperty.all(Size(32, 32)),
-                                  fixedSize:
-                                      WidgetStateProperty.all(Size(32, 32)),
-                                  padding:
-                                      WidgetStateProperty.all(EdgeInsets.zero),
-                                ),
-                                icon: Center(
-                                  child: CustomIcon(
-                                    icon: Image.asset(Images.trash),
-                                    width: 15,
-                                    height: 17,
-                                  ),
-                                ),
-                              ).padRight(16)
-                            ]
-                          : [
-                              TextButton.icon(
-                                onPressed: () => onNetworkTap(
-                                    context, state.selectedAccessPoint),
-                                style: ButtonStyle(
-                                  backgroundColor:
-                                      const WidgetStatePropertyAll<Color>(
-                                          Color(0xFF044DDF)),
-                                  shape: WidgetStatePropertyAll<
-                                      RoundedRectangleBorder>(
-                                    RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: const BorderSide(),
-                                    ),
-                                  ),
-                                ),
-                                icon: const IconWidget(
-                                  iconColor: Colors.white,
-                                  iconPath: Images.addRoundedSquare,
-                                  iconHeight: 20,
-                                  iconWidth: 20,
-                                ),
-                                label: Text(
-                                  "Join Network",
-                                  style: context.textTheme.labelMedium
-                                      ?.copyWith(color: Colors.white),
-                                ),
-                              ).padRight(16)
-                            ])
-                  .padHorizontal(12)),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            physics: const BouncingScrollPhysics(),
-            child: ContainerWidget(
-              child: Column(
-                children: [
-                  const Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [],
-                  ),
-
-                  // const SizedBox(height: 20),
-                  // CustomLabelValue(
-                  //   title: "Network SSID",
-                  //   value: ssid,
-                  // ),
-                  // CustomLabelValue(
-                  //   title: "Network Type",
-                  //   value: ssid,
-                  // ),
-                  // CustomLabelValue(
-                  //   title: "Passphrase",
-                  //   value: accessPoint.rsnFlags.isNotEmpty ? 'WPA/WPA2' : 'None',
-                  // ),
-                  // CustomLabelValue(
-                  //   title: "Frequency",
-                  //   value: '${accessPoint.frequency} MHz',
-                  // ),
-
-                  MechanixSectionList(
-                    physics: const BouncingScrollPhysics(),
-                    title: 'About The Network',
-                    theme: MechanixSectionListThemeData(
-                        widgetPadding: Spacing.only(top: 8, bottom: 40)),
-                    sectionListItems: [
-                      SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Private Wifi Address',
-                          trailing: CustomTrailingText(
-                            title: state.selectedNMAccessPoint?.hwAddress ?? '',
-                          )),
-                    ],
-                  ),
-
-                  if (state.selectedAccessPoint != null &&
-                      state.selectedNMAccessPoint != null)
-                    MechanixSectionList(
-                      sectionListItems: [
-                        SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Signal Strength',
-                          trailing: CustomTrailingText(
-                                  title:
-                                      '${state.selectedAccessPoint?.nmAccessPoint.strength} %')
-                              .padRight(8),
-                        ),
-                        SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Supported Frequency',
-                          trailing: CustomTrailingText(
-                                  title:
-                                      '${state.selectedAccessPoint?.nmAccessPoint.frequency} MHz')
-                              .padRight(8),
-                        ),
-                      ],
+                    ),
+                    const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [],
                     ),
 
-                  if (state.selectedAccessPoint != null &&
-                          state.selectedNMAccessPoint != null &&
-                          state.selectedAccessPoint!.isActive ||
-                      state.selectedAccessPoint!.isSaved)
+                    // const SizedBox(height: 20),
+                    // CustomLabelValue(
+                    //   title: "Network SSID",
+                    //   value: ssid,
+                    // ),
+                    // CustomLabelValue(
+                    //   title: "Network Type",
+                    //   value: ssid,
+                    // ),
+                    // CustomLabelValue(
+                    //   title: "Passphrase",
+                    //   value: accessPoint.rsnFlags.isNotEmpty ? 'WPA/WPA2' : 'None',
+                    // ),
+                    // CustomLabelValue(
+                    //   title: "Frequency",
+                    //   value: '${accessPoint.frequency} MHz',
+                    // ),
+
                     MechanixSectionList(
-                      title: 'IPV4 Address',
                       physics: const BouncingScrollPhysics(),
+                      title: 'About The Network',
+                      theme: MechanixSectionListThemeData(
+                          widgetPadding: Spacing.only(top: 8, bottom: 40)),
                       sectionListItems: [
                         SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'IP Address',
-                          trailing: CustomTrailingText(
-                            title:
-                                '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.addressData.first['address'] : ''}',
-                          ),
-                        ),
-                        SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Subnet Mask',
-                          trailing: CustomTrailingText(
-                            title:
-                                '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.addressData.first['prefix'] : ''}',
-                          ),
-                        ),
-                        SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Router',
-                          trailing: CustomTrailingText(
-                            title:
-                                '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.routeData.first['dest'] : ''}',
-                          ),
-                        ),
+                            defaultTrailingIcon: false,
+                            title: 'Private Wifi Address',
+                            trailing: CustomTrailingText(
+                              title:
+                                  state.selectedNMAccessPoint?.hwAddress ?? '',
+                            )),
                       ],
                     ),
 
-                  if (state.selectedAccessPoint != null &&
-                      state.selectedNMAccessPoint != null &&
-                      state.selectedAccessPoint!.isActive)
-                    MechanixSectionList(
-                      title: 'IPV6 Address',
-                      physics: const BouncingScrollPhysics(),
-                      sectionListItems: [
-                        SectionListItems(
-                          title: 'IP Address',
-                          trailing: CustomTrailingText(
-                                  title:
-                                      '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip6Config?.addressData.length : ''} Addresses')
-                              .padRight(8),
-                        ),
-                        SectionListItems(
-                          defaultTrailingIcon: false,
-                          title: 'Router',
-                          trailing: CustomTrailingText(
-                                  title:
-                                      '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip6Config?.routeData.first['dest'] : ''}')
-                              .padRight(8),
-                        ),
-                      ],
+                    if (state.selectedAccessPoint != null &&
+                        state.selectedNMAccessPoint != null)
+                      MechanixSectionList(
+                        title: 'IPV4 Address',
+                        physics: const BouncingScrollPhysics(),
+                        sectionListItems: [
+                          SectionListItems(
+                            defaultTrailingIcon: false,
+                            title: 'Configure IP',
+                            onTap: () {
+                              final bloc = context.read<WirelessSettingsBloc>();
+
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BlocProvider.value(
+                                    value: bloc,
+                                    child: const Ipv4AddressWidget(),
+                                  ),
+                                ),
+                              );
+                            },
+                            trailing:
+                                const CustomTrailingText(title: 'Automatic'),
+                          ),
+                          if (state.selectedAccessPoint!.isActive)
+                            SectionListItems(
+                              defaultTrailingIcon: false,
+                              title: 'IP Address',
+                              trailing: CustomTrailingText(
+                                title:
+                                    '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.addressData.first['address'] : ''}',
+                              ),
+                            ),
+                          if (state.selectedAccessPoint!.isActive)
+                            SectionListItems(
+                              defaultTrailingIcon: false,
+                              title: 'Subnet Mask',
+                              trailing: CustomTrailingText(
+                                title:
+                                    '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.addressData.first['prefix'] : ''}',
+                              ),
+                            ),
+                          if (state.selectedAccessPoint!.isActive)
+                            SectionListItems(
+                              defaultTrailingIcon: false,
+                              title: 'Router',
+                              trailing: CustomTrailingText(
+                                title:
+                                    '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip4Config?.routeData.first['dest'] : ''}',
+                              ),
+                            ),
+                        ],
+                      ),
+
+                    if (state.selectedAccessPoint != null &&
+                        state.selectedNMAccessPoint != null &&
+                        state.selectedAccessPoint!.isActive)
+                      MechanixSectionList(
+                        title: 'IPV6 Address',
+                        physics: const BouncingScrollPhysics(),
+                        sectionListItems: [
+                          SectionListItems(
+                            title: 'IP Address',
+                            trailing: CustomTrailingText(
+                                    title:
+                                        '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip6Config?.addressData.length : ''} Addresses')
+                                .padRight(8),
+                          ),
+                          SectionListItems(
+                            defaultTrailingIcon: false,
+                            title: 'Router',
+                            trailing: CustomTrailingText(
+                                    title:
+                                        '${state.selectedAccessPoint != null ? state.selectedAccessPoint?.ip6Config?.routeData.first['dest'] : ''}')
+                                .padRight(8),
+                          ),
+                        ],
+                      ),
+                    if (state.selectedAccessPoint != null &&
+                        state.selectedNMAccessPoint != null)
+                      MechanixSectionList(
+                        title: 'DNS',
+                        // physics: const BouncingScrollPhysics(),
+
+                        sectionListItems: [
+                          SectionListItems(
+                            onTap: () {
+                              final bloc = context.read<WirelessSettingsBloc>();
+
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BlocProvider.value(
+                                    value: bloc,
+                                    child: const ConfigureDnsWidget(),
+                                  ),
+                                ),
+                              );
+                            },
+                            title: 'Configure DNS',
+                            trailing:
+                                const CustomTrailingText(title: 'Automatic')
+                                    .padRight(8),
+                          ),
+                        ],
+                      ),
+
+                    if (state.selectedAccessPoint != null &&
+                        state.selectedNMAccessPoint != null)
+                      MechanixSectionList(
+                        title: 'HTTP Proxy',
+                        // physics: const BouncingScrollPhysics(),
+
+                        sectionListItems: [
+                          SectionListItems(
+                            onTap: () {
+                              final bloc = context.read<WirelessSettingsBloc>();
+
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BlocProvider.value(
+                                    value: bloc,
+                                    child: const ConfigureProxyWidget(),
+                                  ),
+                                ),
+                              );
+                            },
+                            title: 'Configure Proxy',
+                            trailing: const CustomTrailingText(title: 'Off')
+                                .padRight(8),
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(
+                      height: 20,
                     ),
+                    // CustomLabelValue(
+                    //   title: "IP Address",
+                    //   value: accessPoint.,
+                    // ),
+                    // CustomLabelValue(
+                    //   title: "Subnet Mask",
+                    //   value: '${accessPoint.frequency} MHz',
+                    // ),
+                    // CustomLabelValue(
+                    //   title: "Gateway",
+                    //   value: '${accessPoint.frequency} MHz',
+                    // ),
 
-                  const SizedBox(
-                    height: 20,
-                  ),
-                  // CustomLabelValue(
-                  //   title: "IP Address",
-                  //   value: accessPoint.,
-                  // ),
-                  // CustomLabelValue(
-                  //   title: "Subnet Mask",
-                  //   value: '${accessPoint.frequency} MHz',
-                  // ),
-                  // CustomLabelValue(
-                  //   title: "Gateway",
-                  //   value: '${accessPoint.frequency} MHz',
-                  // ),
-
-                  // LabelValueListRow(
-                  //     title: 'Frequency', value: '${accessPoint.frequency} MHz'),
-                  // LabelValueListRow(
-                  //     title: 'Hw Address', value: accessPoint.hwAddress),
-                  // LabelValueListRow(
-                  //   title: 'Security',
-                  //   value: accessPoint.rsnFlags.isNotEmpty ? 'WPA/WPA2' : 'None',
-                  // ),
-                ],
-              ).padTop(8),
+                    // LabelValueListRow(
+                    //     title: 'Frequency', value: '${accessPoint.frequency} MHz'),
+                    // LabelValueListRow(
+                    //     title: 'Hw Address', value: accessPoint.hwAddress),
+                    // LabelValueListRow(
+                    //   title: 'Security',
+                    //   value: accessPoint.rsnFlags.isNotEmpty ? 'WPA/WPA2' : 'None',
+                    // ),
+                  ],
+                ).padTop(8),
+              ),
             ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-Future<void> onNetworkTap(
-    BuildContext context, AccessPoints? selectedAccessPoint) async {
-  if (selectedAccessPoint != null && selectedAccessPoint.isSaved) {
-    context
-        .read<WirelessSettingsBloc>()
-        .add(ConnectSavedNetwork('', selectedAccessPoint.nmAccessPoint));
-    Navigator.pop(context);
-  } else {
-    final bloc = context.read<ConnectNetworkBloc>();
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BlocProvider.value(
-          value: bloc,
-          child: ConnectSecureNetwork(
-              accessPoint: selectedAccessPoint?.nmAccessPoint),
-        ),
+            bottomNavigationBar: MechanixBottomBar(
+              leadingWidget: [context.backButton],
+              centerWidget: [
+                (utf8.decode(state.selectedNMAccessPoint?.ssid ?? []) ==
+                            (utf8.decode(
+                                state.connectedNetwork?.nmAccessPoint.ssid ??
+                                    [])) &&
+                        state.wifiState == WifiStatus.connected)
+                    ? BottomBarButton.widget(
+                        widget: TextButton.icon(
+                          onPressed: () {
+                            context.read<WirelessSettingsBloc>().add(
+                                ForgetNetwork(utf8.decode(
+                                    state.selectedNMAccessPoint?.ssid ?? [])));
+                            Navigator.pop(context);
+                          },
+                          icon: IconWidget(
+                            iconPath: Images.addRoundedSquare,
+                            iconHeight: 15,
+                            iconWidth: 15,
+                            boxWidth: 20,
+                            boxHeight: 20,
+                            iconColor: Theme.of(context)
+                                .textButtonTheme
+                                .style
+                                ?.iconColor
+                                ?.resolve({}),
+                          ),
+                          label: const Text("Forget Network"),
+                        ),
+                      )
+                    : BottomBarButton.widget(
+                        widget: TextButton.icon(
+                          onPressed: () {
+                            onNetworkTap(state.selectedAccessPoint);
+                          },
+                          icon: IconWidget(
+                            iconPath: Images.addRoundedSquare,
+                            iconHeight: 15,
+                            iconWidth: 15,
+                            boxWidth: 20,
+                            boxHeight: 20,
+                            iconColor: Theme.of(context)
+                                .textButtonTheme
+                                .style
+                                ?.iconColor
+                                ?.resolve({}),
+                          ),
+                          label: const Text("Join Network"),
+                        ),
+                      ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
