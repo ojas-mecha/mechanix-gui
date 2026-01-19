@@ -29,6 +29,7 @@ import 'package:mechanix_settings/src/features/date_time/blocs/date_time_event.d
 import 'package:mechanix_settings/src/features/date_time/presentation/date_settings.dart';
 import 'package:mechanix_settings/src/features/date_time/presentation/date_time.dart';
 import 'package:mechanix_settings/src/features/date_time/presentation/time_settings.dart';
+import 'package:mechanix_settings/src/features/date_time/presentation/time_zone_list.dart';
 import 'package:mechanix_settings/src/features/display/bloc/display_bloc.dart';
 import 'package:mechanix_settings/src/features/display/data/display_repository.dart';
 import 'package:mechanix_settings/src/features/display/data/display_repository_impl.dart';
@@ -106,7 +107,7 @@ class MechanixSettingsApp extends StatelessWidget with WatchItMixin {
         watchPropertyValue((ThemeToggle t) => t.mechanixVariant);
 
     return MechanixTheme(
-      data: const MechanixThemeData(
+      data: MechanixThemeData(
         mechanixVariant: MechanixVariant.amber,
       ),
       builder: (ctx, mechanix, child) {
@@ -245,7 +246,13 @@ class MainApp extends StatelessWidget {
           AppRoutes.security: (context) => const WifiSecurityWidget(),
 
           // Bluetooth Routes
-          AppRoutes.bluetooth: (context) => const Bluetooth(),
+          AppRoutes.bluetooth: (context) => BlocProvider(
+                create: (context) => BluetoothBloc(
+                  bluetoothRepository: context.read<BluetoothRepository>(),
+                )..add(InitBluetooth()),
+                lazy: false,
+                child: const Bluetooth(),
+              ),
           AppRoutes.bluetoothDeviceInfo: (context) =>
               const BluetoothDeviceInfo(),
           AppRoutes.adapterSettings: (context) => const AdapterSettings(),
@@ -266,6 +273,7 @@ class MainApp extends StatelessWidget {
           AppRoutes.displayScreenOffTime: (context) =>
               const ScreenOffTimeSettings(),
           AppRoutes.lockScreenTimeout: (context) => const LockScreenTimeout(),
+          AppRoutes.timeZone: (context) => const TimeZoneList(),
 
           // Other Routes
           AppRoutes.about: (context) => const About(),
