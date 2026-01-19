@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:mechanix_files/src/commons/customWidgets/middle_ellipsis_text.dart';
+import 'package:mechanix_files/src/commons/customWidgets/pressable_icon.dart';
 import 'package:mechanix_files/src/features/files/presentation/commons.dart';
 import 'package:mechanix_files/src/features/files/presentation/files.dart';
 import 'package:mechanix_files/src/services/media_kit_manager.dart';
@@ -19,8 +20,13 @@ import '../../../commons/constants.dart';
 class AudioPlayerOverlay extends StatefulWidget {
   final BuildContext rootContext;
   String filePath;
+  FileExplorerPageState? state;
+
   AudioPlayerOverlay(
-      {super.key, required this.filePath, required this.rootContext});
+      {super.key,
+      required this.filePath,
+      required this.rootContext,
+      this.state});
 
   @override
   State<AudioPlayerOverlay> createState() => _AudioPlayerOverlayState();
@@ -79,8 +85,7 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final explorerState =
-        widget.rootContext.findAncestorStateOfType<FileExplorerPageState>();
+    final explorerState = widget.state;
 
     final controller = explorerState?.controller;
 
@@ -127,8 +132,7 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
   }
 
   Widget _buildBottomBar(BuildContext context) {
-    final state =
-        widget.rootContext.findAncestorStateOfType<FileExplorerPageState>();
+    final state = widget.state;
 
     return Container(
       decoration: BoxDecoration(
@@ -143,18 +147,17 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
             clipBehavior: Clip.none,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 child: Row(
                   children: [
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Image.asset(
-                        _isPlaying ? Images.pause : Images.play,
-                        width: 24,
-                        height: 24,
-                      ),
-                      onPressed: () {
-                        _isPlaying ? player.pause() : player.play();
+                    PressableIcon(
+                      iconPath: _isPlaying ? Images.pause : Images.play,
+                      onTap: () {
+                        setState(() {
+                          _isPlaying ? player.pause() : player.play();
+                          _isPlaying = !_isPlaying;
+                        });
                       },
                     ),
                     const SizedBox(width: 6),
@@ -196,19 +199,17 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
                           _lastVolume = volume; // store last non-zero volume
                         }
 
-                        return IconButton(
-                          onPressed: () {
-                            if (isMuted) {
-                              player.setVolume(_lastVolume); // restore
-                            } else {
-                              player.setVolume(0.0); // mute
-                            }
+                        return PressableIcon(
+                          iconPath: isMuted ? Images.mute : Images.volume,
+                          onTap: () {
+                            setState(() {
+                              if (isMuted) {
+                                player.setVolume(_lastVolume); // restore
+                              } else {
+                                player.setVolume(0.0); // mute
+                              }
+                            });
                           },
-                          icon: Image.asset(
-                            isMuted ? Images.mute : Images.volume,
-                            width: 24,
-                            height: 24,
-                          ),
                         );
                       },
                     )
@@ -232,43 +233,42 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
               borderRadius: null,
             )),
             leadingWidget: [
-              BottomBarButton(
-                iconTheme: const MechanixBottomBarIconThemeData(
-                    padding: EdgeInsets.only(left: 12), iconSize: Size(28, 28)),
-                iconPath: Images.back,
-                onPressed: () => Navigator.pop(context),
-              ),
+              BottomBarButton.widget(
+                  widget: Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: DecoratedPressableIcon(
+                  iconPath: Images.back,
+                  onTap: () => Navigator.pop(context),
+                ),
+              )),
             ],
             centerWidgetSpacing: 30,
             centerWidget: [
-              BottomBarButton(
-                iconTheme: const MechanixBottomBarIconThemeData(
-                    iconSize: Size(28, 28)),
-                iconPath: Images.copy,
-                onPressed: () {
-                  state?.selectedPaths = {widget.filePath};
-                  state?.handleCopy();
-                },
-              ),
-              BottomBarButton(
-                iconTheme: const MechanixBottomBarIconThemeData(
-                    iconSize: Size(28, 28)),
-                iconPath: Images.move,
-                onPressed: () {
-                  Navigator.pop(context);
-                  state?.selectedPaths = {widget.filePath};
-                  state?.handleMove();
-                },
-              ),
-              BottomBarButton(
-                iconTheme: const MechanixBottomBarIconThemeData(
-                    iconSize: Size(28, 28)),
-                iconWidget: IconWidget(
-                  iconPath: Images.share,
-                  iconColor: Colors.grey.shade600,
+              BottomBarButton.widget(
+                widget: DecoratedPressableIcon(
+                  iconPath: Images.copy,
+                  onTap: () {
+                    state?.selectedPaths = {widget.filePath};
+                    state?.handleCopy();
+                  },
                 ),
-                onPressed: () {},
-                isDisabled: true, //TODO : add share functionality
+              ),
+              BottomBarButton.widget(
+                widget: DecoratedPressableIcon(
+                  iconPath: Images.move,
+                  onTap: () {
+                    Navigator.pop(context);
+                    state?.selectedPaths = {widget.filePath};
+                    state?.handleMove();
+                  },
+                ),
+              ),
+              const BottomBarButton.widget(
+                widget: DecoratedPressableIcon(
+                  iconPath: Images.share,
+                  isDisabled: true, // TODO: add share functionality
+                  onTap: null,
+                ),
               ),
             ],
             anchorWidget: [
@@ -282,8 +282,7 @@ class _AudioPlayerOverlayState extends State<AudioPlayerOverlay> {
 
   Widget buildActionsMenu(BuildContext context) {
     final offset = const Offset(-8, -14);
-    final state =
-        widget.rootContext.findAncestorStateOfType<FileExplorerPageState>();
+    final state = widget.state;
 
     return MechanixMenu(
       offset: offset,

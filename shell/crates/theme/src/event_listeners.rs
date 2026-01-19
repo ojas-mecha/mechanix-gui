@@ -8,12 +8,13 @@ pub fn listen_dispatcher(cx: &mut App, mut theme_tx: mpsc::Sender<ThemeEvents>) 
     if !cx.has_global::<Dispatcher>() {
         dispatcher::init(cx);
     }
-    let mut dispatcher_rx = Dispatcher::global(cx).0.clone();
+
+    let mut dispatcher_rx = Dispatcher::global(cx).channel().1.clone();
 
     _ = cx
         .background_executor()
         .spawn(async move {
-            while let Ok(msg) = dispatcher_rx.try_recv() {
+            while let Ok(msg) = dispatcher_rx.recv().await {
                 match msg {
                     dispatcher::Message::SetThemeMode(mode) => {
                         let _ = theme_tx.send(ThemeEvents::SetThemeMode(mode)).await;
@@ -30,6 +31,15 @@ pub fn listen_dispatcher(cx: &mut App, mut theme_tx: mpsc::Sender<ThemeEvents>) 
                                 foreground,
                             })
                             .await;
+                    }
+                    dispatcher::Message::SetPrimaryFont(font) => {
+                        let _ = theme_tx.send(ThemeEvents::SetPrimaryFont(font)).await;
+                    }
+                    dispatcher::Message::SetSecondaryFont(font) => {
+                        let _ = theme_tx.send(ThemeEvents::SetSecondaryFont(font)).await;
+                    }
+                    dispatcher::Message::SetTertiaryFont(font) => {
+                        let _ = theme_tx.send(ThemeEvents::SetTertiaryFont(font)).await;
                     }
                     _ => (),
                 }
@@ -63,6 +73,24 @@ pub fn listen_theme_channel(cx: &mut App, mut theme_rx: mpsc::Receiver<ThemeEven
                         ThemeManager::apply(cx);
                         cx.refresh_windows();
                     });
+                }
+                ThemeEvents::SetPrimaryFont(font) => {
+                    _ = app.update(|cx| {
+                        Fonts::global_mut(cx).primary = font.into();
+                        cx.refresh_windows();
+                    })
+                }
+                ThemeEvents::SetSecondaryFont(font) => {
+                    _ = app.update(|cx| {
+                        Fonts::global_mut(cx).secondary = font.into();
+                        cx.refresh_windows();
+                    })
+                }
+                ThemeEvents::SetTertiaryFont(font) => {
+                    _ = app.update(|cx| {
+                        Fonts::global_mut(cx).tertiary = font.into();
+                        cx.refresh_windows();
+                    })
                 }
             }
         }

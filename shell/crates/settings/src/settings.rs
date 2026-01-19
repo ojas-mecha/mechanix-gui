@@ -6,6 +6,8 @@ use gpui::*;
 use serde::Deserialize;
 use toml::{Table, Value};
 
+const LAYOUTS_BASE_PATH: &str = "/usr/share/mechanix/shell/layouts/";
+
 #[derive(Debug, Default, Clone, Deserialize, PartialEq)]
 pub struct Settings {
     #[serde(default)]
@@ -22,6 +24,18 @@ pub struct Settings {
     pub app_drawer: AppDrawerSettings,
     #[serde(default)]
     pub homescreen: HomescreenSettings,
+    #[serde(default)]
+    pub power_options: PowerOptionsSettings,
+    #[serde(default)]
+    pub lockscreen: LockscreenSettings,
+    #[serde(default)]
+    pub volume_slider: VolumeSliderSettings,
+    #[serde(default)]
+    pub keyboard: KeyboardSettings,
+    #[serde(default)]
+    pub launcher: LauncherSettings,
+    #[serde(default)]
+    pub system_apps: SystemApps,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -78,6 +92,8 @@ pub struct RunningAppsSettings {
     pub layer_shell: LayerShellSettings,
     #[serde(default)]
     pub navbar_size: Size<Pixels>,
+    #[serde(default)]
+    pub input_regions: InputRegions,
 }
 
 impl Default for RunningAppsSettings {
@@ -90,7 +106,8 @@ impl Default for RunningAppsSettings {
                 exclusive_zone: px(-1.0),
                 size: Size::new(px(540.0), px(300.0)),
             },
-            navbar_size: Size::new(px(180.0), px(29.0)),
+            navbar_size: Size::new(px(199.22), px(28.5)),
+            input_regions: InputRegions::default(),
         }
     }
 }
@@ -102,6 +119,10 @@ pub struct SettingsDrawerSettings {
     pub layer_shell: LayerShellSettings,
     #[serde(default)]
     pub navbar_size: Size<Pixels>,
+    #[serde(default)]
+    pub system_apps: SystemApps,
+    #[serde(default)]
+    pub input_regions: InputRegions,
 }
 
 impl Default for SettingsDrawerSettings {
@@ -114,7 +135,9 @@ impl Default for SettingsDrawerSettings {
                 exclusive_zone: px(-1.0),
                 size: Size::new(px(540.0), px(620.0)),
             },
-            navbar_size: Size::new(px(180.0), px(29.0)),
+            navbar_size: Size::new(px(199.22), px(28.5)),
+            system_apps: SystemApps::default(),
+            input_regions: InputRegions::default(),
         }
     }
 }
@@ -138,7 +161,7 @@ impl Default for UniversalSearchSettings {
                 exclusive_zone: px(-1.0),
                 size: Size::new(px(540.0), px(620.0)),
             },
-            navbar_size: Size::new(px(180.0), px(29.0)),
+            navbar_size: Size::new(px(199.22), px(28.5)),
         }
     }
 }
@@ -150,6 +173,8 @@ pub struct NotificationSettings {
     pub layer_shell: LayerShellSettings,
     #[serde(default)]
     pub navbar_size: Size<Pixels>,
+    #[serde(default)]
+    pub input_regions: InputRegions,
 }
 
 impl Default for NotificationSettings {
@@ -162,7 +187,8 @@ impl Default for NotificationSettings {
                 exclusive_zone: px(-1.0),
                 size: Size::new(px(540.0), px(620.0)),
             },
-            navbar_size: Size::new(px(180.0), px(29.0)),
+            navbar_size: Size::new(px(199.22), px(28.5)),
+            input_regions: InputRegions::default(),
         }
     }
 }
@@ -195,6 +221,12 @@ pub struct HomescreenSettings {
     pub status_bar_size: Size<Pixels>,
 
     #[serde(default)]
+    pub navbar_size: Size<Pixels>,
+
+    #[serde(default)]
+    pub navbar_height: Pixels,
+
+    #[serde(default)]
     pub layer_shell: LayerShellSettings,
 }
 
@@ -202,6 +234,7 @@ impl Default for HomescreenSettings {
     fn default() -> Self {
         Self {
             status_bar_size: Size::new(px(540.0), px(36.0)),
+            navbar_size: Size::new(px(199.22), px(28.5)),
             layer_shell: LayerShellSettings {
                 layer: Layer::Bottom,
                 anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT | Anchor::BOTTOM,
@@ -209,6 +242,157 @@ impl Default for HomescreenSettings {
                 exclusive_zone: px(0.0),
                 size: Size::new(px(540.0), px(620.0)),
             },
+            navbar_height: px(40.),
+        }
+    }
+}
+
+/// Power options settings
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct PowerOptionsSettings {
+    #[serde(default)]
+    pub layer_shell: LayerShellSettings,
+}
+
+impl Default for PowerOptionsSettings {
+    fn default() -> Self {
+        Self {
+            layer_shell: LayerShellSettings {
+                layer: Layer::Overlay,
+                anchor: Anchor::TOP,
+                namespace: "mechanix.power.options".into(),
+                exclusive_zone: px(0.0),
+                size: Size::new(px(540.0), px(620.0)),
+            },
+        }
+    }
+}
+
+/// Lockscreen settings
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct LockscreenSettings {
+    #[serde(default)]
+    pub layer_shell: LayerShellSettings,
+}
+
+impl Default for LockscreenSettings {
+    fn default() -> Self {
+        Self {
+            layer_shell: LayerShellSettings {
+                layer: Layer::Overlay,
+                anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+                namespace: "mechanix.lockscreen".into(),
+                exclusive_zone: px(0.0),
+                size: Size::new(px(540.0), px(620.0)),
+            },
+        }
+    }
+}
+
+/// Volume slider settings
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct VolumeSliderSettings {
+    #[serde(default)]
+    pub layer_shell: LayerShellSettings,
+    #[serde(default)]
+    pub min_volume_level: f32,
+    #[serde(default)]
+    pub max_volume_level: f32,
+}
+
+impl Default for VolumeSliderSettings {
+    fn default() -> Self {
+        Self {
+            layer_shell: LayerShellSettings {
+                layer: Layer::Overlay,
+                anchor: Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+                namespace: "mechanix.hardware_buttons.slider".into(),
+                exclusive_zone: px(0.0),
+                size: Size::new(px(500.0), px(60.0)),
+            },
+            min_volume_level: 0.0,
+            max_volume_level: 100.0,
+        }
+    }
+}
+
+/// Keyboard settings
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct KeyboardSettings {
+    #[serde(default)]
+    pub layer_shell: LayerShellSettings,
+    #[serde(default)]
+    pub default_layout: String,
+}
+
+impl Default for KeyboardSettings {
+    fn default() -> Self {
+        Self {
+            layer_shell: LayerShellSettings {
+                layer: Layer::Top,
+                anchor: Anchor::TOP,
+                namespace: "mechanix.keyboard".into(),
+                exclusive_zone: px(0.0),
+                size: Size::new(px(540.0), px(274.0)),
+            },
+            default_layout: format!("{}us.yaml", LAYOUTS_BASE_PATH),
+        }
+    }
+}
+
+/// Launcher settings
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct LauncherSettings {
+    #[serde(default)]
+    pub layer_shell: LayerShellSettings,
+}
+
+impl Default for LauncherSettings {
+    fn default() -> Self {
+        Self {
+            layer_shell: LayerShellSettings {
+                layer: Layer::Bottom,
+                anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT | Anchor::BOTTOM,
+                namespace: "mechanix.launcher".into(),
+                exclusive_zone: px(0.0),
+                size: Size::new(px(540.0), px(620.0)),
+            },
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Deserialize, PartialEq)]
+pub struct InputRegions {
+    #[serde(default)]
+    pub minimized: Region,
+    #[serde(default)]
+    pub maximized: Region,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, PartialEq)]
+pub struct Region {
+    #[serde(default)]
+    pub origin: Point<Pixels>,
+    #[serde(default)]
+    pub size: Size<Pixels>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct SystemApps {
+    #[serde(default)]
+    pub files: String,
+    pub settings: String,
+    pub terminal: String,
+    pub camera: String,
+}
+
+impl Default for SystemApps {
+    fn default() -> Self {
+        Self {
+            files: "mechanix_files".into(),
+            settings: "Mechanix Settings".into(),
+            terminal: "Alacritty".into(),
+            camera: "Mechanix Camera".into(),
         }
     }
 }
@@ -228,16 +412,16 @@ pub fn config_paths_for(file_name: &str) -> Vec<PathBuf> {
     };
 
     config_paths.push(PathBuf::from(format!(
-        "/usr/share/mechanix/launcher/assets/{}",
+        "/usr/share/mechanix/shell/assets/{}",
         file_name
     )));
     config_paths.push(PathBuf::from(format!(
-        "/etc/mechanix/launcher/assets/{}",
+        "/etc/mechanix/shell/assets/{}",
         file_name
     )));
 
     if let Some(home_dir) = dirs::home_dir() {
-        config_paths.push(home_dir.join(format!(".config/mechanix/launcher/assets/{}", file_name)));
+        config_paths.push(home_dir.join(format!(".config/mechanix/shell/assets/{}", file_name)));
     }
 
     config_paths

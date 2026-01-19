@@ -1,25 +1,28 @@
 use crate::events::AppEvents;
-use crate::prelude::icon::{Icon, IconName};
+use crate::widgets::prelude::{
+    DbNotification, NotificationCenter, NotificationList, NotificationUi, NotificationWidget,
+    UserDismissedEvent,
+};
 use desktop_dbus::NotificationService;
 use futures::channel::mpsc;
-use futures::{select, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt, select};
 use gpui::layer_shell::{KeyboardInteractivity, LayerShellOptions};
 use gpui::{
-    div, point, px, rgb, App, AppContext, Bounds, Context,
-    ElementId, InteractiveElement, IntoElement, ParentElement, ReadGlobal,
-    Render, SharedString, StatefulInteractiveElement, Styled, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
+    App, AppContext, Bounds, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
+    ReadGlobal, Render, SharedString, StatefulInteractiveElement, Styled,
+    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, point, px, rgb, svg,
 };
-use settings::prelude::{LayerShellSettings, NotificationSettings, Settings};
-use crate::widgets::prelude::{DbNotification, NotificationCenter, NotificationList, NotificationUi, NotificationWidget, UserDismissedEvent};
+use icons::prelude::Icons;
+use settings::prelude::{InputRegions, LayerShellSettings, NotificationSettings, Settings};
+use theme::ActiveTheme;
 
 mod events;
-mod ui;
 mod helper;
+mod ui;
 pub mod widgets;
 
 pub mod prelude {
     pub use crate::events::AppEvents;
-    pub use crate::ui::icon;
     pub use crate::ui::NotificationStory;
 }
 
@@ -27,8 +30,14 @@ pub fn run_app(cx: &mut App) {
     let NotificationSettings {
         layer_shell,
         navbar_size,
+        input_regions,
         ..
     } = Settings::global(cx).notifications.clone();
+    
+    let InputRegions {
+        minimized,
+        maximized,
+    } = input_regions;
 
     let LayerShellSettings {
         size,
@@ -40,6 +49,8 @@ pub fn run_app(cx: &mut App) {
     } = layer_shell;
 
     let window_bounds = WindowBounds::Windowed(Bounds::centered(None, size, cx));
+
+    let colors = cx.theme().colors.clone();
 
     cx.open_window(
         WindowOptions {
@@ -253,6 +264,7 @@ pub fn run_app(cx: &mut App) {
                                 let ui_tx_buttons = ui_tx_for_ui_task.clone();
                                 let center_for_click = center_for_visibility.clone();
                                 let _ = list_for_events.update_in(cx, |list, window, cx| {
+
                                     list.push(
                                         {
                                             let base = NotificationUi::new()
@@ -290,13 +302,15 @@ pub fn run_app(cx: &mut App) {
                                                     .mt_2()
                                                     .pt_2()
                                                     .border_t_1()
-                                                    .border_color(rgb(0xff9500))
+                                                    .border_color(colors.background_700)
                                                     .flex()
                                                     .flex_row()
                                                     .items_center();
 
                                                 let items: Vec<(String, String)> = actions_pairs.clone();
                                                 let total = items.len();
+                                                let icons = Icons::global(notif_cx).notifications.clone();
+                                                let default_icon: SharedString = icons.application.to_string_lossy().to_string().into();
                                                 for (idx, (action_id, action_label)) in items.into_iter().enumerate() {
                                                     let is_last = idx + 1 == total;
                                                     let btn_id = format!("action-{}", action_id);
@@ -304,6 +318,7 @@ pub fn run_app(cx: &mut App) {
                                                     let btn_eid = ElementId::Name(SharedString::from(btn_id));
                                                     let ui_tx_click = ui_tx_buttons.clone();
                                                     let clicked_notif_id = notif_id;
+                                                    
 
                                                     // Each cell is flex_1 and centered
                                                     row = row.child(
@@ -316,7 +331,7 @@ pub fn run_app(cx: &mut App) {
                                                             .items_center()
                                                             .gap_2()
                                                             .py_2()
-                                                            .text_color(if is_last { rgb(0xff9500) } else { rgb(0xe9e9e9) })
+                                                            .text_color(if is_last { colors.accent_200 } else { colors.foreground_500 })
                                                             .on_click(notif_cx.listener(move |this, _, window, cx| {
                                                                 println!(
                                                                     "Action '{}' clicked for notification {}",
@@ -330,7 +345,7 @@ pub fn run_app(cx: &mut App) {
                                                                 this.dismiss(window, cx);
                                                             }))
                                                             // Placeholder icon, will be replaced by designer
-                                                            .child(Icon::new(IconName::Application).size((px(18.), px(18.))).text_color(if is_last { rgb(0xff9500) } else { rgb(0xe9e9e9) }))
+                                                            .child(svg().external_path(&default_icon).w(px(18.)).h(px(18.)).text_color(if is_last { colors.accent_200 } else { colors.foreground_500 }))
                                                             .child(action_label.clone())
                                                     );
 
@@ -340,7 +355,7 @@ pub fn run_app(cx: &mut App) {
                                                             div()
                                                                 .w(px(1.0))
                                                                 .h(px(24.0))
-                                                                .bg(rgb(0x3a3a3a))
+                                                                .bg(colors.background_700)
                                                         );
                                                     }
                                                 }
@@ -378,8 +393,8 @@ pub fn run_app(cx: &mut App) {
             {
                 let mut regions = Vec::new();
                 regions.push(Bounds {
-                    origin: point(px(0.), size.height - navbar_size.height),
-                    size: gpui::size(navbar_size.width, navbar_size.height),
+                    origin: minimized.origin,
+                    size: minimized.size,
                 });
                 window.set_input_regions(Some(regions));
                 cx.new(|cx| NotificationWidget::new(center, notification_list, cx))
